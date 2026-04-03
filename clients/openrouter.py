@@ -5,7 +5,7 @@ from typing import Any
 import requests
 from jsonschema import Draft202012Validator, ValidationError
 
-from app_config import AppConfigError, get_openrouter_default_model
+from config.app_config import AppConfigError, get_openrouter_default_model
 
 OPENROUTER_API_KEY_NAME = "OPENROUTER_API_KEY"
 OPENROUTER_BASE_URL_NAME = "OPENROUTER_BASE_URL"
