@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# IDEs
+.idea/
+.vscode/
+
+# Optional
+.env
+.DS_Store
