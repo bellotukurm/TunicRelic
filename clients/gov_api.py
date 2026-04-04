@@ -195,7 +195,7 @@ class GovApiCompanyResolver(CompanyResolver):
                 {
                     "company_name": item.get("title"),
                     "registration_number": item.get("company_number"),
-                    "jurisdiction": "GB",
+                    "jurisdiction": item.get("jurisdiction"),
                     "company_status": item.get("company_status"),
                     "company_type": item.get("company_type"),
                 }

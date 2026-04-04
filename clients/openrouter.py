@@ -3,13 +3,14 @@ import os
 from typing import Any
 
 import requests
-from jsonschema import Draft202012Validator, ValidationError
 
-from config.app_config import AppConfigError, get_openrouter_default_model
+from config.app_config import (
+    AppConfigError,
+    get_openrouter_base_url,
+    get_openrouter_default_model,
+)
 
 OPENROUTER_API_KEY_NAME = "OPENROUTER_API_KEY"
-OPENROUTER_BASE_URL_NAME = "OPENROUTER_BASE_URL"
-DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 TIMEOUT_SECONDS = 30
 
 
@@ -18,7 +19,7 @@ class OpenRouterClientError(Exception):
 
 
 class OpenRouterClient:
-    """Small synchronous client for structured OpenRouter completions."""
+    """Minimal client for structured OpenRouter chat completions."""
 
     def __init__(
         self,
@@ -26,41 +27,60 @@ class OpenRouterClient:
         default_model: str | None = None,
         base_url: str | None = None,
     ):
-        self.api_key = self._resolve_required_value(
-            api_key,
-            OPENROUTER_API_KEY_NAME,
-        )
+        self.api_key = api_key or os.getenv(OPENROUTER_API_KEY_NAME)
+        if not self.api_key:
+            raise OpenRouterClientError(
+                f"Missing environment variable: {OPENROUTER_API_KEY_NAME}"
+            )
+
         try:
             self.default_model = default_model or get_openrouter_default_model()
+            self.base_url = (base_url or get_openrouter_base_url()).rstrip("/")
         except AppConfigError as exc:
             raise OpenRouterClientError(str(exc)) from exc
-        self.base_url = (
-            base_url
-            or os.getenv(OPENROUTER_BASE_URL_NAME)
-            or DEFAULT_OPENROUTER_BASE_URL
-        ).rstrip("/")
 
-    def _resolve_required_value(
+    def create_structured_completion(
         self,
-        provided_value: str | None,
-        env_name: str,
-    ) -> str:
-        value = provided_value or os.getenv(env_name)
-        if not value:
-            raise OpenRouterClientError(f"Missing environment variable: {env_name}")
-        return value
+        messages: list[dict[str, str]],
+        json_schema: dict[str, Any],
+        schema_name: str,
+        model: str | None = None,
+        temperature: float = 0,
+        max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        if not messages:
+            raise OpenRouterClientError("messages is required")
 
-    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        url = f"{self.base_url}{path}"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
+        payload: dict[str, Any] = {
+            "model": model or self.default_model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": False,
+            "provider": {
+                "require_parameters": True,
+            },
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema_name,
+                    "strict": True,
+                    "schema": json_schema,
+                },
+            },
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        if tools is not None:
+            payload["tools"] = tools
 
         try:
             response = requests.post(
-                url,
-                headers=headers,
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
                 json=payload,
                 timeout=TIMEOUT_SECONDS,
             )
@@ -76,91 +96,41 @@ class OpenRouterClient:
             )
 
         try:
-            return response.json()
+            response_data = response.json()
+            print(response_data)
         except ValueError as exc:
-            raise OpenRouterClientError(
-                "OpenRouter response was not valid JSON."
-            ) from exc
+            raise OpenRouterClientError("OpenRouter response was not valid JSON.") from exc
 
-    def _extract_content(self, response_data: dict[str, Any]) -> str | dict[str, Any]:
         choices = response_data.get("choices", [])
         if not choices:
             raise OpenRouterClientError("OpenRouter response did not include any choices.")
 
-        message = choices[0].get("message", {})
-        content = message.get("content")
+        content = choices[0].get("message", {}).get("content")
         if isinstance(content, dict):
             return content
 
         if isinstance(content, str) and content.strip():
-            return content
-
-        if isinstance(content, list):
-            text_parts = []
-            for part in content:
-                if isinstance(part, dict) and isinstance(part.get("text"), str):
-                    text_parts.append(part["text"])
-
-            joined = "".join(text_parts).strip()
-            if joined:
-                return joined
-
-        raise OpenRouterClientError(
-            "OpenRouter response did not include assistant content."
-        )
-
-    def create_structured_completion(
-        self,
-        messages: list[dict[str, str]],
-        json_schema: dict[str, Any],
-        schema_name: str,
-        model: str | None = None,
-        temperature: float = 0,
-        max_tokens: int | None = None,
-    ) -> dict[str, Any]:
-        if not messages:
-            raise OpenRouterClientError("messages is required")
-
-        try:
-            Draft202012Validator.check_schema(json_schema)
-        except Exception as exc:
-            raise OpenRouterClientError(f"Invalid JSON schema: {exc}") from exc
-
-        payload: dict[str, Any] = {
-            "model": model or self.default_model,
-            "messages": messages,
-            "temperature": temperature,
-            "stream": False,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": schema_name,
-                    "strict": True,
-                    "schema": json_schema,
-                },
-            },
-        }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
-
-        response_data = self._post("/chat/completions", payload)
-        content = self._extract_content(response_data)
-
-        if isinstance(content, dict):
-            parsed_content = content
-        else:
             try:
-                parsed_content = json.loads(content)
+                return json.loads(content)
             except json.JSONDecodeError as exc:
                 raise OpenRouterClientError(
                     f"Structured response was not valid JSON: {exc}"
                 ) from exc
 
-        try:
-            Draft202012Validator(json_schema).validate(parsed_content)
-        except ValidationError as exc:
-            raise OpenRouterClientError(
-                f"Structured response did not match schema: {exc.message}"
-            ) from exc
+        if isinstance(content, list):
+            text = "".join(
+                part.get("text", "")
+                for part in content
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            ).strip()
+            if text:
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError as exc:
+                    raise OpenRouterClientError(
+                        f"Structured response was not valid JSON: {exc}"
+                    ) from exc
 
-        return parsed_content
+        raise OpenRouterClientError(
+            "OpenRouter response did not include assistant content."
+        )

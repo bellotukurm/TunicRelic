@@ -39,3 +39,29 @@ def get_openrouter_default_model() -> str:
         )
 
     return default_model.strip()
+
+
+def get_openrouter_base_url() -> str:
+    config = load_application_config()
+    openrouter_config = config.get("openrouter")
+    if not isinstance(openrouter_config, dict):
+        raise AppConfigError("application.yml is missing the 'openrouter' section.")
+
+    base_url = openrouter_config.get("base_url")
+    if not isinstance(base_url, str) or not base_url.strip():
+        raise AppConfigError("application.yml is missing 'openrouter.base_url'.")
+
+    return base_url.strip()
+
+
+def get_gnews_base_url() -> str:
+    config = load_application_config()
+    gnews_config = config.get("gnews")
+    if not isinstance(gnews_config, dict):
+        raise AppConfigError("application.yml is missing the 'gnews' section.")
+
+    base_url = gnews_config.get("base_url")
+    if not isinstance(base_url, str) or not base_url.strip():
+        raise AppConfigError("application.yml is missing 'gnews.base_url'.")
+
+    return base_url.strip()
