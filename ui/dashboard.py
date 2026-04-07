@@ -48,7 +48,7 @@ class UIDashboard:
         self.news_service = news_service or CompanyNewsService()
 
     @staticmethod
-    def render_header(self):
+    def render_header():
         st.write("BY MUHAMMAD TUKUR")
         st.title("Tunic Relic")
         st.caption("This relic is a weapon")

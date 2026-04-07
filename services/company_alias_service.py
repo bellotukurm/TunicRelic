@@ -1,6 +1,7 @@
 from typing import Any
 
 from clients.openrouter import OpenRouterClient, OpenRouterClientError
+from config.app_config import get_openrouter_default_model
 
 SYSTEM_PROMPT = """You are doing evidence-based brand identification.
 
@@ -64,7 +65,7 @@ class CompanyAliasService:
 
         try:
             raw_result = self.client.create_structured_completion(
-                model="openai/gpt-4.1",
+                model=get_openrouter_default_model(),
                 messages=[
                     {
                         "role": "system",
