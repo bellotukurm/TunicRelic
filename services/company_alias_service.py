@@ -1,7 +1,7 @@
+import json
 from typing import Any
 
 from clients.openrouter import OpenRouterClient, OpenRouterClientError
-from config.app_config import get_openrouter_default_model
 
 SYSTEM_PROMPT = """You are doing evidence-based brand identification.
 
@@ -65,7 +65,6 @@ class CompanyAliasService:
 
         try:
             raw_result = self.client.create_structured_completion(
-                model=get_openrouter_default_model(),
                 messages=[
                     {
                         "role": "system",
@@ -85,4 +84,4 @@ class CompanyAliasService:
         except OpenRouterClientError as exc:
             raise CompanyAliasServiceError(str(exc)) from exc
 
-        return raw_result
+        return json.loads(raw_result)

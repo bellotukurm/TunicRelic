@@ -1,4 +1,3 @@
-import json
 import os
 from typing import Any
 
@@ -39,6 +38,46 @@ class OpenRouterClient:
         except AppConfigError as exc:
             raise OpenRouterClientError(str(exc)) from exc
 
+
+    def create_chat_completion(
+            self,
+            payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not payload.get("messages"):
+            raise OpenRouterClientError("payload['messages'] is required")
+
+        final_payload: dict[str, Any] = {
+            "model": self.default_model,
+            **payload,
+        }
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=final_payload,
+                timeout=TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as exc:
+            raise OpenRouterClientError(f"Request to OpenRouter failed: {exc}") from exc
+
+        if response.status_code == 401:
+            raise OpenRouterClientError("Unauthorized. Check your OpenRouter API key.")
+
+        if not response.ok:
+            raise OpenRouterClientError(
+                f"OpenRouter request failed: {response.status_code} {response.text}"
+            )
+
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise OpenRouterClientError("OpenRouter response was not valid JSON.") from exc
+
+
     def create_structured_completion(
         self,
         messages: list[dict[str, str]],
@@ -47,7 +86,7 @@ class OpenRouterClient:
         model: str | None = None,
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
+    ) -> str:
         if not messages:
             raise OpenRouterClientError("messages is required")
 
@@ -72,63 +111,16 @@ class OpenRouterClient:
         if tools is not None:
             payload["tools"] = tools
 
-        try:
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=TIMEOUT_SECONDS,
-            )
-        except requests.RequestException as exc:
-            raise OpenRouterClientError(f"Request to OpenRouter failed: {exc}") from exc
-
-        if response.status_code == 401:
-            raise OpenRouterClientError("Unauthorized. Check your OpenRouter API key.")
-
-        if not response.ok:
-            raise OpenRouterClientError(
-                f"OpenRouter request failed: {response.status_code} {response.text}"
-            )
-
-        try:
-            response_data = response.json()
-            print(response_data)
-        except ValueError as exc:
-            raise OpenRouterClientError("OpenRouter response was not valid JSON.") from exc
+        response_data = self.create_chat_completion(payload)
 
         choices = response_data.get("choices", [])
         if not choices:
             raise OpenRouterClientError("OpenRouter response did not include any choices.")
 
         content = choices[0].get("message", {}).get("content")
-        if isinstance(content, dict):
+        if content:
             return content
 
-        if isinstance(content, str) and content.strip():
-            try:
-                return json.loads(content)
-            except json.JSONDecodeError as exc:
-                raise OpenRouterClientError(
-                    f"Structured response was not valid JSON: {exc}"
-                ) from exc
-
-        if isinstance(content, list):
-            text = "".join(
-                part.get("text", "")
-                for part in content
-                if isinstance(part, dict) and isinstance(part.get("text"), str)
-            ).strip()
-            if text:
-                try:
-                    return json.loads(text)
-                except json.JSONDecodeError as exc:
-                    raise OpenRouterClientError(
-                        f"Structured response was not valid JSON: {exc}"
-                    ) from exc
-
         raise OpenRouterClientError(
-            "OpenRouter response did not include assistant content."
+            "OpenRouter response did not include content."
         )
