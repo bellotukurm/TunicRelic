@@ -84,4 +84,9 @@ class CompanyAliasService:
         except OpenRouterClientError as exc:
             raise CompanyAliasServiceError(str(exc)) from exc
 
-        return json.loads(raw_result)
+        try:
+            return json.loads(raw_result)
+        except json.JSONDecodeError as exc:
+            raise CompanyAliasServiceError(
+                "Brand identification response was not valid JSON."
+            ) from exc
