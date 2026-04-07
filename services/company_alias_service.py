@@ -64,7 +64,7 @@ class CompanyAliasService:
             raise CompanyAliasServiceError("legal_name is required")
 
         try:
-            raw_result = self.client.create_structured_completion(
+            raw_result = self.client.create_structured_output(
                 messages=[
                     {
                         "role": "system",

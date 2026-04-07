@@ -78,7 +78,7 @@ class OpenRouterClient:
             raise OpenRouterClientError("OpenRouter response was not valid JSON.") from exc
 
 
-    def create_structured_completion(
+    def create_structured_output(
         self,
         messages: list[dict[str, str]],
         json_schema: dict[str, Any],
