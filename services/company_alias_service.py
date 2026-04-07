@@ -80,7 +80,6 @@ class CompanyAliasService:
                 ],
                 json_schema=BRAND_IDENTIFICATION_SCHEMA,
                 schema_name="brand_identification",
-                temperature=0,
                 tools=WEB_SEARCH_TOOL,
             )
         except OpenRouterClientError as exc:

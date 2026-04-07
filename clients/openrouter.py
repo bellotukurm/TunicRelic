@@ -45,7 +45,6 @@ class OpenRouterClient:
         json_schema: dict[str, Any],
         schema_name: str,
         model: str | None = None,
-        temperature: float = 0,
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
@@ -55,7 +54,6 @@ class OpenRouterClient:
         payload: dict[str, Any] = {
             "model": model or self.default_model,
             "messages": messages,
-            "temperature": temperature,
             "stream": False,
             "provider": {
                 "require_parameters": True,
